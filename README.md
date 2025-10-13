@@ -3,7 +3,7 @@
 🚀 **Ready-to-deploy GAT Prediction API untuk Vercel**
 
 ## Fitur
-- ✅ Flask API dengan GAT model prediction
+- ✅ Flask API dengan GAT model predictions
 - ✅ Arsitektur SimplifiedGATModel (sesuai notebook)  
 - ✅ Input validation & error handling
 - ✅ CORS enabled untuk frontend integration
