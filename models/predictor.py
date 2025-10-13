@@ -28,7 +28,8 @@ class GATPredictor:
                 if os.path.exists(model_path):
                     try:
                         print(f"🔄 Attempting to load model from {model_path}")
-                        checkpoint = torch.load(model_path, map_location='cpu')
+                        # Fix for PyTorch 2.6 weights_only security change
+                        checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
                         
                         if isinstance(checkpoint, dict) and 'model_config' in checkpoint:
                             # Load model with saved configuration
