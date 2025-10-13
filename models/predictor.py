@@ -17,14 +17,25 @@ class GATPredictor:
     def load_model(self):
         """Load the trained GAT model or create untrained fallback"""
         try:
-            # Try to load trained weights first to get the correct config
+            # Model configuration matching notebook
+            model_config = {
+                'n_students': 1,
+                'n_modules': 7,
+                'student_features': 3,
+                'module_features': 3,
+                'hidden_dim': 64,
+                'output_dim': 32,
+                'n_heads': 4,
+                'dropout': 0.1,
+                'silent': True  # Don't print during API calls
+            }
+            
+            self.model = SimplifiedGATModel(**model_config)
+            
+            # Try to load trained weights if available
             model_paths = [
                 'models/enhanced_gat_complete.pth',
-                'enhanced_gat_complete.pth',
             ]
-            
-            model_loaded = False
-            load_error = None
             
             for model_path in model_paths:
                 if os.path.exists(model_path):
@@ -32,118 +43,29 @@ class GATPredictor:
                         checkpoint = torch.load(model_path, map_location='cpu')
                         
                         if isinstance(checkpoint, dict):
-                            if 'model_config' in checkpoint and 'model_state_dict' in checkpoint:
-                                # Complete model package with config
-                                config = checkpoint['model_config'].copy()
-                                config['n_students'] = 1  # Adjust for single prediction
+                            if 'model_state_dict' in checkpoint:
+                                self.model.load_state_dict(checkpoint['model_state_dict'])
+                            elif 'model_config' in checkpoint:
+                                # Complete model package
+                                config = checkpoint['model_config']
+                                config['n_students'] = 1
                                 config['silent'] = True
-                                
-                                # Create model with saved config
                                 self.model = SimplifiedGATModel(**config)
                                 self.model.load_state_dict(checkpoint['model_state_dict'])
-                                self.is_trained = True
-                                model_loaded = True
-                                break
-                                
-                            elif 'model_state_dict' in checkpoint:
-                                # State dict only - use default config but try different configs
-                                configs_to_try = [
-                                    # Original notebook config
-                                    {
-                                        'n_students': 1, 'n_modules': 7, 'student_features': 3, 'module_features': 3,
-                                        'hidden_dim': 64, 'output_dim': 32, 'n_heads': 4, 'dropout': 0.1, 'silent': True
-                                    },
-                                    # Alternative config 1
-                                    {
-                                        'n_students': 1, 'n_modules': 7, 'student_features': 3, 'module_features': 3,
-                                        'hidden_dim': 32, 'output_dim': 16, 'n_heads': 2, 'dropout': 0.3, 'silent': True
-                                    },
-                                    # Alternative config 2 
-                                    {
-                                        'n_students': 1, 'n_modules': 7, 'student_features': 3, 'module_features': 3,
-                                        'hidden_dim': 128, 'output_dim': 64, 'n_heads': 8, 'dropout': 0.1, 'silent': True
-                                    }
-                                ]
-                                
-                                for config in configs_to_try:
-                                    try:
-                                        self.model = SimplifiedGATModel(**config)
-                                        self.model.load_state_dict(checkpoint['model_state_dict'])
-                                        self.is_trained = True
-                                        model_loaded = True
-                                        break
-                                    except Exception as config_error:
-                                        continue
-                                
-                                if model_loaded:
-                                    break
                             else:
-                                # Try as direct state dict
-                                configs_to_try = [
-                                    {
-                                        'n_students': 1, 'n_modules': 7, 'student_features': 3, 'module_features': 3,
-                                        'hidden_dim': 64, 'output_dim': 32, 'n_heads': 4, 'dropout': 0.1, 'silent': True
-                                    },
-                                    {
-                                        'n_students': 1, 'n_modules': 7, 'student_features': 3, 'module_features': 3,
-                                        'hidden_dim': 32, 'output_dim': 16, 'n_heads': 2, 'dropout': 0.3, 'silent': True
-                                    }
-                                ]
-                                
-                                for config in configs_to_try:
-                                    try:
-                                        self.model = SimplifiedGATModel(**config)
-                                        self.model.load_state_dict(checkpoint)
-                                        self.is_trained = True
-                                        model_loaded = True
-                                        break
-                                    except Exception:
-                                        continue
-                                
-                                if model_loaded:
-                                    break
+                                self.model.load_state_dict(checkpoint)
                         else:
-                            # Direct state dict
-                            configs_to_try = [
-                                {
-                                    'n_students': 1, 'n_modules': 7, 'student_features': 3, 'module_features': 3,
-                                    'hidden_dim': 64, 'output_dim': 32, 'n_heads': 4, 'dropout': 0.1, 'silent': True
-                                },
-                                {
-                                    'n_students': 1, 'n_modules': 7, 'student_features': 3, 'module_features': 3,
-                                    'hidden_dim': 32, 'output_dim': 16, 'n_heads': 2, 'dropout': 0.3, 'silent': True
-                                }
-                            ]
-                            
-                            for config in configs_to_try:
-                                try:
-                                    self.model = SimplifiedGATModel(**config)
-                                    self.model.load_state_dict(checkpoint)
-                                    self.is_trained = True
-                                    model_loaded = True
-                                    break
-                                except Exception:
-                                    continue
-                            
-                            if model_loaded:
-                                break
-                                
-                    except Exception as e:
-                        load_error = str(e)
+                            self.model.load_state_dict(checkpoint)
+                        
+                        self.is_trained = True
+                        break
+                    except Exception:
                         continue
-            
-            # If no model loaded, create fallback
-            if not model_loaded:
-                self.model = SimplifiedGATModel(
-                    n_students=1, n_modules=7, student_features=3, module_features=3,
-                    hidden_dim=32, output_dim=16, n_heads=2, dropout=0.1, silent=True
-                )
-                self.is_trained = False
             
             self.model.eval()
             
         except Exception as e:
-            # Final fallback model
+            # Fallback model
             self.model = SimplifiedGATModel(
                 n_students=1, n_modules=7, student_features=3, module_features=3,
                 hidden_dim=32, output_dim=16, n_heads=2, dropout=0.1, silent=True
@@ -151,41 +73,6 @@ class GATPredictor:
             self.model.eval()
             self.is_trained = False
     
-    def get_model_info(self):
-        """Get information about loaded model for debugging"""
-        info = {
-            'model_trained': self.is_trained,
-            'model_exists': self.model is not None,
-            'architecture': 'SimplifiedGATModel'
-        }
-        
-        if self.model is not None:
-            info.update({
-                'n_students': self.model.n_students,
-                'n_modules': self.model.n_modules, 
-                'hidden_dim': self.model.hidden_dim,
-                'output_dim': self.model.output_dim,
-                'model_parameters': sum(p.numel() for p in self.model.parameters()),
-                'trainable_parameters': sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-            })
-            
-        # Check if model files exist
-        model_paths = [
-            'models/enhanced_gat_complete.pth',
-            'enhanced_gat_complete.pth'
-        ]
-        
-        file_info = {}
-        for path in model_paths:
-            file_info[path] = {
-                'exists': os.path.exists(path),
-                'size_mb': round(os.path.getsize(path) / (1024*1024), 2) if os.path.exists(path) else 0
-            }
-        
-        info['model_files'] = file_info
-        
-        return info
-
     def predict(self, irt_ability: float, survey_confidence: float = 0.7):
         """Make prediction for single student level"""
         try:

@@ -24,10 +24,8 @@ def home():
         'version': '1.0.0',
         'endpoints': {
             'predict': '/api/predict (POST)',
-            'predict_batch': '/api/predict-batch (POST)',
             'health': '/api/health (GET)',
-            'model_info': '/api/model-info (GET)',
-            'debug': '/api/debug (GET)'
+            'model_info': '/api/model-info (GET)'
         },
         'usage': {
             'predict': {
@@ -315,26 +313,6 @@ def model_info():
             }
         }
     })
-
-@app.route('/debug', methods=['GET'])
-def debug():
-    """Debug endpoint untuk troubleshooting model loading"""
-    try:
-        debug_info = predictor.get_model_info()
-        
-        return jsonify({
-            'status': 'success',
-            'debug_info': debug_info,
-            'api_version': '1.0.0',
-            'timestamp': str(pd.Timestamp.now()) if 'pd' in globals() else 'N/A'
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': f'Debug failed: {str(e)}',
-            'code': 'DEBUG_ERROR'
-        }), 500
 
 # For Vercel serverless function
 def handler(request):
