@@ -37,7 +37,23 @@ class GATPredictor:
                             config['n_students'] = 1  # Override for API single prediction
                             config['silent'] = True
                             
+                            # Fix: Use config from checkpoint, but override n_students
                             print(f"📋 Loaded model config: {config}")
+                            
+                            # Check if config has the right dimensions based on actual checkpoint
+                            # The error shows checkpoint has hidden_dim=64, output_dim=32, n_heads=4
+                            if 'input_embedding.weight' in checkpoint['model_state_dict']:
+                                checkpoint_hidden_dim = checkpoint['model_state_dict']['input_embedding.weight'].shape[0]
+                                checkpoint_output_dim = checkpoint['model_state_dict']['gat_layer.layer_norm.weight'].shape[0]
+                                checkpoint_n_heads = checkpoint['model_state_dict']['gat_layer.W'].shape[0]
+                                
+                                # Update config to match checkpoint
+                                config['hidden_dim'] = checkpoint_hidden_dim
+                                config['output_dim'] = checkpoint_output_dim
+                                config['n_heads'] = checkpoint_n_heads
+                                
+                                print(f"📋 Corrected config based on checkpoint: hidden_dim={checkpoint_hidden_dim}, output_dim={checkpoint_output_dim}, n_heads={checkpoint_n_heads}")
+                            
                             self.model = SimplifiedGATModel(**config)
                             self.model.load_state_dict(checkpoint['model_state_dict'])
                             self.model_config = config
