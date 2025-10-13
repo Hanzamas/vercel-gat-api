@@ -11,67 +11,131 @@ from .gat_model import SimplifiedGATModel
 class GATPredictor:
     def __init__(self):
         self.model = None
+        self.model_config = None
         self.is_trained = False
         self.load_model()
     
     def load_model(self):
         """Load the trained GAT model or create untrained fallback"""
         try:
-            # Model configuration matching notebook
-            model_config = {
-                'n_students': 1,
-                'n_modules': 7,
-                'student_features': 3,
-                'module_features': 3,
-                'hidden_dim': 64,
-                'output_dim': 32,
-                'n_heads': 4,
-                'dropout': 0.1,
-                'silent': True  # Don't print during API calls
-            }
-            
-            self.model = SimplifiedGATModel(**model_config)
-            
-            # Try to load trained weights if available
+            # First try to load trained model with saved config
             model_paths = [
                 'models/enhanced_gat_complete.pth',
             ]
             
+            model_loaded = False
             for model_path in model_paths:
                 if os.path.exists(model_path):
                     try:
+                        print(f"🔄 Attempting to load model from {model_path}")
                         checkpoint = torch.load(model_path, map_location='cpu')
                         
-                        if isinstance(checkpoint, dict):
-                            if 'model_state_dict' in checkpoint:
-                                self.model.load_state_dict(checkpoint['model_state_dict'])
-                            elif 'model_config' in checkpoint:
-                                # Complete model package
-                                config = checkpoint['model_config']
-                                config['n_students'] = 1
-                                config['silent'] = True
-                                self.model = SimplifiedGATModel(**config)
-                                self.model.load_state_dict(checkpoint['model_state_dict'])
-                            else:
-                                self.model.load_state_dict(checkpoint)
+                        if isinstance(checkpoint, dict) and 'model_config' in checkpoint:
+                            # Load model with saved configuration
+                            config = checkpoint['model_config'].copy()
+                            config['n_students'] = 1  # Override for API single prediction
+                            config['silent'] = True
+                            
+                            print(f"📋 Loaded model config: {config}")
+                            self.model = SimplifiedGATModel(**config)
+                            self.model.load_state_dict(checkpoint['model_state_dict'])
+                            self.model_config = config
+                            self.is_trained = True
+                            model_loaded = True
+                            print(f"✅ Successfully loaded trained model from {model_path}")
+                            break
+                            
+                        elif isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+                            # Try with notebook training config
+                            config = {
+                                'n_students': 1,
+                                'n_modules': 7,
+                                'student_features': 3,
+                                'module_features': 3,
+                                'hidden_dim': 64,  # Enhanced config from notebook
+                                'output_dim': 32,   # Enhanced config from notebook
+                                'n_heads': 4,       # Enhanced config from notebook
+                                'dropout': 0.1,
+                                'silent': True
+                            }
+                            
+                            print(f"📋 Using notebook config: {config}")
+                            self.model = SimplifiedGATModel(**config)
+                            self.model.load_state_dict(checkpoint['model_state_dict'])
+                            self.model_config = config
+                            self.is_trained = True
+                            model_loaded = True
+                            print(f"✅ Successfully loaded model with notebook config from {model_path}")
+                            break
+                            
                         else:
+                            # Direct state dict
+                            config = {
+                                'n_students': 1,
+                                'n_modules': 7,
+                                'student_features': 3,
+                                'module_features': 3,
+                                'hidden_dim': 64,
+                                'output_dim': 32,
+                                'n_heads': 4,
+                                'dropout': 0.1,
+                                'silent': True
+                            }
+                            
+                            self.model = SimplifiedGATModel(**config)
                             self.model.load_state_dict(checkpoint)
-                        
-                        self.is_trained = True
-                        break
-                    except Exception:
+                            self.model_config = config
+                            self.is_trained = True
+                            model_loaded = True
+                            print(f"✅ Successfully loaded direct state dict from {model_path}")
+                            break
+                            
+                    except Exception as e:
+                        print(f"❌ Failed to load from {model_path}: {str(e)}")
                         continue
+            
+            if not model_loaded:
+                # Create fallback model with simplified config
+                print("🔄 Creating fallback untrained model")
+                config = {
+                    'n_students': 1, 
+                    'n_modules': 7, 
+                    'student_features': 3, 
+                    'module_features': 3,
+                    'hidden_dim': 32, 
+                    'output_dim': 16, 
+                    'n_heads': 2, 
+                    'dropout': 0.1, 
+                    'silent': True
+                }
+                
+                self.model = SimplifiedGATModel(**config)
+                self.model_config = config
+                self.is_trained = False
+                print("⚠️ Using untrained fallback model")
             
             self.model.eval()
             
         except Exception as e:
-            # Fallback model
-            self.model = SimplifiedGATModel(
-                n_students=1, n_modules=7, student_features=3, module_features=3,
-                hidden_dim=32, output_dim=16, n_heads=2, dropout=0.1, silent=True
-            )
+            # Emergency fallback
+            print(f"❌ Critical error in model loading: {str(e)}")
+            config = {
+                'n_students': 1, 
+                'n_modules': 7, 
+                'student_features': 3, 
+                'module_features': 3,
+                'hidden_dim': 32, 
+                'output_dim': 16, 
+                'n_heads': 2, 
+                'dropout': 0.1, 
+                'silent': True
+            }
+            
+            self.model = SimplifiedGATModel(**config)
+            self.model_config = config
             self.model.eval()
             self.is_trained = False
+            print("🚨 Using emergency fallback model")
     
     def predict(self, irt_ability: float, survey_confidence: float = 0.7):
         """Make prediction for single student level"""
@@ -218,6 +282,7 @@ class GATPredictor:
                     'ability_percentile': round(student_features[2], 4)
                 },
                 'model_trained': self.is_trained,
+                'model_config': self.model_config,
                 'architecture': 'SimplifiedGATModel'
             }
     

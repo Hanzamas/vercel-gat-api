@@ -7,7 +7,7 @@ import requests
 import json
 
 # API base URL (change to your deployed URL)
-BASE_URL = "http://localhost:5000"
+BASE_URL = "https://r00c0gsckc8ckgowc408k8ow.coolify.hanzamas.tech/"
 # BASE_URL = "https://your-app.vercel.app"
 
 def test_api():
@@ -29,7 +29,7 @@ def test_api():
     # Test 2: Health check
     print("\n2. Testing Health endpoint...")
     try:
-        response = requests.get(f"{BASE_URL}/api/health")
+        response = requests.get(f"{BASE_URL}/health")
         print(f"   Status: {response.status_code}")
         if response.status_code == 200:
             data = response.json()
@@ -44,7 +44,7 @@ def test_api():
     # Test 3: Model info
     print("\n3. Testing Model Info endpoint...")
     try:
-        response = requests.get(f"{BASE_URL}/api/model-info")
+        response = requests.get(f"{BASE_URL}/model-info")
         print(f"   Status: {response.status_code}")
         if response.status_code == 200:
             data = response.json()
@@ -75,7 +75,7 @@ def test_api():
             }
             
             response = requests.post(
-                f"{BASE_URL}/api/predict",
+                f"{BASE_URL}/predict",
                 json=payload,
                 headers={"Content-Type": "application/json"}
             )
@@ -117,7 +117,7 @@ def test_api():
         print(f"\n   Error Test {i}: {error_case['name']}")
         try:
             response = requests.post(
-                f"{BASE_URL}/api/predict",
+                f"{BASE_URL}/predict",
                 json=error_case["payload"],
                 headers={"Content-Type": "application/json"}
             )

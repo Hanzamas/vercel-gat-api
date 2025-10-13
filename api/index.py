@@ -290,6 +290,9 @@ def health():
 @app.route('/model-info', methods=['GET'])
 def model_info():
     """Model information endpoint"""
+    # Get actual model config if available
+    actual_config = getattr(predictor, 'model_config', {})
+    
     return jsonify({
         'status': 'success',
         'model_info': {
@@ -297,14 +300,14 @@ def model_info():
             'features': '3D (IRT_Ability, Survey_Confidence, Ability_Percentile)',
             'model_loaded': predictor.model is not None,
             'model_trained': predictor.is_trained,
-            'parameters': {
+            'parameters': actual_config if actual_config else {
                 'n_students': 1,
                 'n_modules': 7,
                 'student_features': 3,
                 'module_features': 3,
-                'hidden_dim': 64 if predictor.is_trained else 32,
-                'output_dim': 32 if predictor.is_trained else 16,
-                'n_heads': 4 if predictor.is_trained else 2
+                'hidden_dim': 32,  # Fallback values
+                'output_dim': 16,
+                'n_heads': 2
             },
             'prediction_levels': [1, 2, 3],
             'input_ranges': {
