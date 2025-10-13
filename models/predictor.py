@@ -260,12 +260,45 @@ class GATPredictor:
         with torch.no_grad():
             output = self.model(node_features_tensor, adj_matrix_tensor, edge_weights_tensor)
             
-            level_probs = F.softmax(output['student_levels'][0], dim=0)
+            # Get raw logits and probabilities
+            raw_logits = output['student_levels'][0]
+            level_probs = F.softmax(raw_logits, dim=0)
             predicted_level = torch.argmax(level_probs).item() + 1
             confidence = level_probs.max().item()
             
-            # Adjust prediction if model is not trained
-            if not self.is_trained:
+            # 🔧 ANTI-COLLAPSE POST-PROCESSING FIX
+            # Apply IRT-based correction if model is biased towards Level 1
+            if self.is_trained and predicted_level == 1:
+                # Check if student should realistically be higher level
+                if irt_ability > 0.5:  # Medium-high ability
+                    # Rebalance probabilities based on IRT
+                    irt_factor = min((irt_ability + 3) / 6, 1.0)  # 0-1 scale
+                    
+                    # Boost Level 2 and 3 probabilities
+                    adjusted_probs = level_probs.clone()
+                    
+                    if irt_ability > 1.5:  # Very high ability -> boost Level 3
+                        boost_factor = min(irt_ability / 3.0, 0.4)
+                        adjusted_probs[2] += boost_factor
+                        adjusted_probs[0] -= boost_factor * 0.7
+                        adjusted_probs[1] -= boost_factor * 0.3
+                    elif irt_ability > 0.5:  # Medium-high ability -> boost Level 2
+                        boost_factor = min((irt_ability - 0.5) / 2.0, 0.3)
+                        adjusted_probs[1] += boost_factor
+                        adjusted_probs[0] -= boost_factor
+                    
+                    # Normalize probabilities
+                    adjusted_probs = adjusted_probs / adjusted_probs.sum()
+                    
+                    # Update prediction based on adjusted probabilities
+                    predicted_level = torch.argmax(adjusted_probs).item() + 1
+                    confidence = adjusted_probs.max().item()
+                    level_probs = adjusted_probs
+                    
+                    print(f"🔧 Anti-collapse correction applied for IRT={irt_ability:.3f}: {predicted_level}")
+            
+            # Original adjustment for untrained model
+            elif not self.is_trained:
                 if irt_ability < -0.5:
                     predicted_level = 1
                     confidence = min(confidence + 0.2, 0.9)
