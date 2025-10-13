@@ -1,0 +1,16 @@
+{
+  "name": "gat-prediction-api",
+  "version": "1.0.0",
+  "description": "GAT Prediction API for Adaptive Learning System",
+  "main": "api/index.py",
+  "scripts": {
+    "dev": "python api/index.py",
+    "test": "python test_api.py",
+    "deploy": "vercel --prod"
+  },
+  "keywords": ["gat", "machine-learning", "education", "api", "vercel"],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {}
+}
