@@ -176,8 +176,12 @@ class ModuleRecommender:
             )
             
             # Extract attention weights
-            # attention_weights shape: [n_heads, n_nodes, n_nodes]
+            # attention_weights is returned as list from GAT model
             attention_weights = output['attention_weights']
+            
+            # Convert list of [N, N] tensors to [n_heads, N, N] tensor
+            if isinstance(attention_weights, list):
+                attention_weights = torch.stack(attention_weights, dim=0)
             
             # Extract student (node 0) to modules (nodes 1-7) attention
             # Average across all attention heads
