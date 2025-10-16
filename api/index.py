@@ -21,9 +21,10 @@ def home():
     return jsonify({
         'status': 'success',
         'message': 'GAT Prediction API is running!',
-        'version': '1.0.0',
+        'version': '2.0.0',
         'endpoints': {
-            'predict': '/api/predict (POST)',
+            'predict': '/api/predict (POST) - Student level prediction',
+            'recommend_modules': '/api/recommend-modules (POST) - Module recommendations',
             'health': '/api/health (GET)',
             'model_info': '/api/model-info (GET)'
         },
@@ -37,6 +38,21 @@ def home():
                 'example': {
                     'irt_ability': 0.5,
                     'survey_confidence': 0.8
+                }
+            },
+            'recommend_modules': {
+                'method': 'POST',
+                'body': {
+                    'irt_ability': 'float (-3.0 to 3.0)',
+                    'survey_confidence': 'float (0.0 to 1.0)',
+                    'pre_test_results': 'array[7] of 0 or 1',
+                    'strategy': 'string (optional: simple, weighted, conditional)'
+                },
+                'example': {
+                    'irt_ability': 0.5,
+                    'survey_confidence': 0.8,
+                    'pre_test_results': [1, 0, 1, 1, 0, 0, 0],
+                    'strategy': 'weighted'
                 }
             }
         }
@@ -287,6 +303,133 @@ def health():
             'timestamp': str(pd.Timestamp.now()) if 'pd' in globals() else 'N/A'
         }), 500
 
+@app.route('/recommend-modules', methods=['POST'])
+def recommend_modules():
+    """Module recommendation endpoint using attention-based approach"""
+    try:
+        # Get JSON data
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                'status': 'error',
+                'message': 'No JSON data provided',
+                'code': 'MISSING_DATA'
+            }), 400
+        
+        # Extract parameters
+        irt_ability = data.get('irt_ability')
+        survey_confidence = data.get('survey_confidence')
+        pre_test_results = data.get('pre_test_results')
+        strategy = data.get('strategy', 'weighted')
+        
+        # Validate required parameters
+        if irt_ability is None:
+            return jsonify({
+                'status': 'error',
+                'message': 'irt_ability is required',
+                'code': 'MISSING_IRT_ABILITY'
+            }), 400
+        
+        if survey_confidence is None:
+            return jsonify({
+                'status': 'error',
+                'message': 'survey_confidence is required',
+                'code': 'MISSING_SURVEY_CONFIDENCE'
+            }), 400
+        
+        if pre_test_results is None:
+            return jsonify({
+                'status': 'error',
+                'message': 'pre_test_results is required',
+                'code': 'MISSING_PRE_TEST_RESULTS'
+            }), 400
+        
+        # Validate parameter types
+        try:
+            irt_ability = float(irt_ability)
+            survey_confidence = float(survey_confidence)
+        except (ValueError, TypeError):
+            return jsonify({
+                'status': 'error',
+                'message': 'irt_ability and survey_confidence must be numbers',
+                'code': 'INVALID_PARAMETER_TYPE'
+            }), 400
+        
+        # Validate pre_test_results
+        if not isinstance(pre_test_results, list):
+            return jsonify({
+                'status': 'error',
+                'message': 'pre_test_results must be an array',
+                'code': 'INVALID_PRE_TEST_FORMAT'
+            }), 400
+        
+        if len(pre_test_results) != 7:
+            return jsonify({
+                'status': 'error',
+                'message': 'pre_test_results must have exactly 7 elements (one per module)',
+                'code': 'INVALID_PRE_TEST_LENGTH'
+            }), 400
+        
+        # Validate each element is 0 or 1
+        try:
+            pre_test_results = [int(x) for x in pre_test_results]
+            if not all(x in [0, 1] for x in pre_test_results):
+                raise ValueError("Elements must be 0 or 1")
+        except (ValueError, TypeError):
+            return jsonify({
+                'status': 'error',
+                'message': 'pre_test_results must contain only 0 or 1',
+                'code': 'INVALID_PRE_TEST_VALUES'
+            }), 400
+        
+        # Validate parameter ranges
+        if not (-5.0 <= irt_ability <= 5.0):
+            return jsonify({
+                'status': 'error',
+                'message': 'irt_ability must be between -5.0 and 5.0',
+                'code': 'IRT_ABILITY_OUT_OF_RANGE'
+            }), 400
+        
+        if not (0.0 <= survey_confidence <= 1.0):
+            return jsonify({
+                'status': 'error',
+                'message': 'survey_confidence must be between 0.0 and 1.0',
+                'code': 'SURVEY_CONFIDENCE_OUT_OF_RANGE'
+            }), 400
+        
+        # Validate strategy
+        valid_strategies = ['simple', 'weighted', 'conditional']
+        if strategy not in valid_strategies:
+            return jsonify({
+                'status': 'error',
+                'message': f'strategy must be one of: {", ".join(valid_strategies)}',
+                'code': 'INVALID_STRATEGY'
+            }), 400
+        
+        # Generate recommendations
+        result = predictor.recommend_modules(
+            irt_ability=irt_ability,
+            survey_confidence=survey_confidence,
+            pre_test_results=pre_test_results,
+            strategy=strategy
+        )
+        
+        # Return result
+        return jsonify({
+            'status': 'success',
+            'data': result,
+            'api_version': '2.0.0',
+            'timestamp': str(pd.Timestamp.now()) if 'pd' in globals() else 'N/A'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Internal server error: {str(e)}',
+            'code': 'INTERNAL_ERROR'
+        }), 500
+
 @app.route('/model-info', methods=['GET'])
 def model_info():
     """Model information endpoint"""
@@ -313,6 +456,12 @@ def model_info():
             'input_ranges': {
                 'irt_ability': [-3.0, 3.0],
                 'survey_confidence': [0.0, 1.0]
+            },
+            'module_recommendation': {
+                'strategies': ['simple', 'weighted', 'conditional'],
+                'modules': 7,
+                'uses_attention_weights': True,
+                'no_retraining_needed': True
             }
         }
     })

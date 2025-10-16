@@ -7,12 +7,14 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 from .gat_model import SimplifiedGATModel
+from .module_recommender import ModuleRecommender
 
 class GATPredictor:
     def __init__(self):
         self.model = None
         self.model_config = None
         self.is_trained = False
+        self.module_recommender = None
         self.load_model()
     
     def load_model(self):
@@ -133,6 +135,11 @@ class GATPredictor:
             
             self.model.eval()
             
+            # Initialize ModuleRecommender
+            print("🎯 Initializing ModuleRecommender...")
+            self.module_recommender = ModuleRecommender(self.model, self.model_config)
+            print("✅ ModuleRecommender ready")
+            
         except Exception as e:
             # Emergency fallback
             print(f"❌ Critical error in model loading: {str(e)}")
@@ -153,6 +160,9 @@ class GATPredictor:
             self.model.eval()
             self.is_trained = False
             print("🚨 Using emergency fallback model")
+            
+            # Initialize ModuleRecommender even with fallback
+            self.module_recommender = ModuleRecommender(self.model, self.model_config)
     
     def predict(self, irt_ability: float, survey_confidence: float = 0.7):
         """Make prediction for single student level"""
@@ -363,6 +373,106 @@ class GATPredictor:
                 'ability_percentile': round(ability_percentile, 4)
             },
             'model_trained': False,
+            'error': error_msg
+        }
+    
+    def recommend_modules(
+        self,
+        irt_ability: float,
+        survey_confidence: float,
+        pre_test_results: list,
+        strategy: str = 'weighted'
+    ):
+        """
+        Generate module recommendations using attention-based approach
+        
+        Args:
+            irt_ability: Student IRT ability score (-3 to 3)
+            survey_confidence: Student self-assessment confidence (0 to 1)
+            pre_test_results: Binary list [7] indicating pass (1) or fail (0) per module
+            strategy: 'simple', 'weighted', or 'conditional' (default: 'weighted')
+        
+        Returns:
+            Dict containing module_recommendations, recommended_order, and metadata
+        """
+        try:
+            # Validate inputs
+            irt_ability = max(min(float(irt_ability), 3.0), -3.0)
+            survey_confidence = max(min(float(survey_confidence), 1.0), 0.0)
+            
+            if not isinstance(pre_test_results, list) or len(pre_test_results) != 7:
+                raise ValueError("pre_test_results must be a list of 7 integers (0 or 1)")
+            
+            # Convert to binary (0 or 1)
+            pre_test_results = [1 if x else 0 for x in pre_test_results]
+            
+            # Use ModuleRecommender
+            result = self.module_recommender.recommend_modules(
+                irt_ability=irt_ability,
+                survey_confidence=survey_confidence,
+                pre_test_results=pre_test_results,
+                strategy=strategy
+            )
+            
+            # Add success flag
+            result['success'] = True
+            
+            return result
+            
+        except Exception as e:
+            # Fallback recommendation
+            return self._fallback_module_recommendation(
+                irt_ability,
+                survey_confidence,
+                pre_test_results,
+                str(e)
+            )
+    
+    def _fallback_module_recommendation(
+        self,
+        irt_ability: float,
+        survey_confidence: float,
+        pre_test_results: list,
+        error_msg: str
+    ):
+        """Fallback module recommendation when ModuleRecommender fails"""
+        
+        # Simple fallback: Unlock if passed pre-test
+        recommendations = []
+        for i in range(7):
+            module_id = i + 1
+            passed = pre_test_results[i] == 1 if i < len(pre_test_results) else False
+            
+            recommendations.append({
+                'module_id': module_id,
+                'module_name': f'Module {module_id}',
+                'unlock': passed,
+                'confidence': 0.5 if passed else 0.1,
+                'attention_score': 0.0,
+                'pre_test_passed': passed,
+                'reasoning': 'Fallback: Based on pre-test result only'
+            })
+        
+        # Simple order: Unlocked first
+        unlocked = [r['module_id'] for r in recommendations if r['unlock']]
+        locked = [r['module_id'] for r in recommendations if not r['unlock']]
+        recommended_order = unlocked + locked
+        
+        return {
+            'success': False,
+            'module_recommendations': recommendations,
+            'recommended_order': recommended_order,
+            'metadata': {
+                'irt_ability': round(irt_ability, 4),
+                'survey_confidence': round(survey_confidence, 4),
+                'pre_test_summary': {
+                    'total_passed': sum(pre_test_results),
+                    'total_failed': 7 - sum(pre_test_results),
+                    'pass_rate': round(sum(pre_test_results) / 7, 4)
+                },
+                'strategy_used': 'fallback',
+                'model_trained': False
+            },
             'error': error_msg
         }
 
